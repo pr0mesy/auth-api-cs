@@ -29,6 +29,7 @@ builder.Services.AddDbContext<AppDbContext>(
 
 // Services
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<TokenService>();
 builder.Services.Configure<JwtSettings>(
     builder.Configuration.GetSection("Jwt")
 );

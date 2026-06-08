@@ -8,25 +8,24 @@ namespace AuthApi.Services;
 public class AuthService
 {
     private readonly AppDbContext _context;
-
-    public AuthService(AppDbContext context)
+    private readonly TokenService _tokenService;
+    
+    public AuthService(AppDbContext context, TokenService tokenService)
     {
-        this._context = context;
+        _context = context;
+        _tokenService = tokenService;
     }
     
-    // método para registrar um usuário no banco.
     public async Task<AuthResponse> Register(RegisterRequest request)
     {
-        // verifica se o e-mail ja existe. caso positivo lança exceção.
-        var exists = await _context.Users
+        var userExists = await _context.Users
             .AnyAsync(u => u.Email == request.Email);
 
-        if (exists)
+        if (userExists)
         {
             throw new Exception("email already registered.");
         }
 
-        // encriptografa a senha do request.
         var encryptedPass = BCrypt.Net.BCrypt.HashPassword(request.Password);
 
         var user = new User(
@@ -34,15 +33,51 @@ public class AuthService
             request.Email,
             encryptedPass);
         
-        // salvar o novo usuario
         await _context.Users.AddAsync(user);
         await _context.SaveChangesAsync();
+        
+        var token = _tokenService.GenerateToken(user);
 
         return new AuthResponse(
             user.Id,
             user.Name,
             user.Email,
-            user.Role.ToString()
+            user.Role.ToString(),
+            token
+        );
+    }
+    
+    public async Task<AuthResponse> Login(LoginRequest request)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.Email == request.Email
+            );
+
+        if (user is null)
+        {
+            throw new Exception("invalid credentials.");
+        }
+
+        var validPassword =
+            BCrypt.Net.BCrypt.Verify(
+                request.Password,
+                user.PasswordHash
+            );
+        
+        if (!validPassword)
+        {
+            throw new Exception("invalid credentials.");
+        }
+        
+        var token = _tokenService.GenerateToken(user);
+        
+        return new AuthResponse(
+            user.Id,
+            user.Name,
+            user.Email,
+            user.Role.ToString(),
+            token
         );
     }
         
