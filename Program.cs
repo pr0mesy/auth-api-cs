@@ -5,13 +5,16 @@ using AuthApi.Configs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using AuthApi.Configs;
+using DotNetEnv;
+
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
 
 // Controllers
 builder.Services.AddControllers();
+
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -22,7 +25,11 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(
     options =>
         options.UseNpgsql(
-            builder.Configuration.GetConnectionString("Default")
+            $"Host={Environment.GetEnvironmentVariable("DB_HOST")};" +
+            $"Port={Environment.GetEnvironmentVariable("DB_PORT")};" +
+            $"Database={Environment.GetEnvironmentVariable("DB_NAME")};" +
+            $"Username={Environment.GetEnvironmentVariable("DB_USER")};" +
+            $"Password={Environment.GetEnvironmentVariable("DB_PASSWORD")}"
         )
 );
 
@@ -30,33 +37,48 @@ builder.Services.AddDbContext<AppDbContext>(
 // Services
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
-builder.Services.Configure<JwtSettings>(
-    builder.Configuration.GetSection("Jwt")
-);
-builder.Services.AddAuthentication(
-        JwtBearerDefaults.AuthenticationScheme
+
+
+var jwtSettings = new JwtSettings
+{
+    Key = Environment.GetEnvironmentVariable("JWT_KEY")
+        ?? throw new Exception("JWT_KEY not configured"),
+
+    ExpirationMinutes = int.Parse(
+        Environment.GetEnvironmentVariable("JWT_EXPIRATION_MINUTES")
+        ?? throw new Exception("JWT_EXPIRATION_MINUTES not configured")
     )
-    .AddJwtBearer(options =>
-    {
-        var key = builder.Configuration["Jwt:Key"]!;
+};
 
 
-        options.TokenValidationParameters =
-            new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
+builder.Services.AddSingleton(jwtSettings);
 
-                IssuerSigningKey =
-                    new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(key)
-                    ),
 
-                ValidateIssuer = false,
-                ValidateAudience = false,
+builder.Services.AddAuthentication(
+    JwtBearerDefaults.AuthenticationScheme
+)
+.AddJwtBearer(options =>
+{
+    var key = Environment.GetEnvironmentVariable("JWT_KEY")
+              ?? throw new Exception("JWT_KEY not configured");
 
-                ClockSkew = TimeSpan.Zero
-            };
-    });
+
+    options.TokenValidationParameters =
+        new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+
+            IssuerSigningKey =
+                new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(key)
+                ),
+
+            ValidateIssuer = false,
+            ValidateAudience = false,
+
+            ClockSkew = TimeSpan.Zero
+        };
+});
 
 
 var app = builder.Build();
@@ -75,7 +97,7 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
-// habilita Controllers
+
 app.MapControllers();
 
 

@@ -12,9 +12,9 @@ public class TokenService
 {
     private readonly JwtSettings _settings;
     
-    public TokenService(IOptions<JwtSettings> settings)
+    public TokenService(JwtSettings settings)
     {
-        _settings = settings.Value;
+        _settings = settings;
     }
     
     public string GenerateToken(User user)
